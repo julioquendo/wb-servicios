@@ -1,45 +1,28 @@
-# WB Servicios — Central API (base de despliegue)
+# WB Servicios — Central web (MVP)
 
-Proyecto inicial para GitHub y Docker Compose. Incluye API FastAPI, PostgreSQL, registro de empresas, generación de API Keys por agente, heartbeat y estados de documentos. **No incluye todavía una interfaz web administrativa, integración DIAN, motor de firma, SMTP, ni el agente Windows completo.** No usar en producción sin controles adicionales.
+Central web multiempresa con FastAPI, PostgreSQL y panel HTML, lista para Docker Compose.
 
 ## Instalación
 
 ```bash
 cp .env.example .env
-# Cambiar POSTGRES_PASSWORD y ADMIN_TOKEN por valores fuertes y únicos
-# No publicar .env en GitHub
+# Cambiar POSTGRES_PASSWORD y ADMIN_TOKEN por secretos largos y aleatorios
 docker compose up -d --build
-docker compose ps
-curl http://127.0.0.1:8080/health
 ```
 
-API local: `http://127.0.0.1:8080/docs`. El puerto solo escucha en localhost. Para acceso remoto configure un proxy inverso HTTPS con autenticación y controles de acceso; no exponga directamente la API ni /docs a Internet.
+La interfaz se abre en **http://localhost:8080/** desde el servidor. La documentación API está en **http://localhost:8080/docs**. Por seguridad, Compose publica solo en 127.0.0.1:8080; para acceso externo use un proxy HTTPS autenticado.
 
-## Registrar una empresa y un agente
+## Funciones incluidas
 
-```bash
-export ADMIN_TOKEN='el_mismo_token_de_.env'
-curl -X POST http://127.0.0.1:8080/admin/companies \
- -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
- -d '{"name":"WIBER SAS","nit":"900843080"}'
+- Panel web con resumen, empresas, agentes, estados y filtros de documentos.
+- Generación de API Key por agente (solo se muestra una vez, se guarda hash SHA-256).
+- Configuración por empresa de prefijos, resolución, rangos y consecutivos para factura y nota crédito.
+- Cola de órdenes para consultar estado DIAN o reenviar correo de documentos aceptados.
+- API para heartbeat, reporte de estados, lectura y confirmación de órdenes por el agente.
+- PostgreSQL persistente en volumen Docker.
 
-curl -X POST http://127.0.0.1:8080/admin/agents \
- -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
- -d '{"company_id":1,"name":"WIBERB-01"}'
-```
+## Límites de esta entrega
 
-La respuesta del segundo comando incluye `api_key`, visible solo una vez. Guardarla de forma segura en el agente Windows.
+**No es una solución de facturación DIAN lista para producción.** El agente Windows actual debe adaptarse para recoger y ejecutar órdenes, generar XML firmado, consultar DIAN y enviar correos. La central solo registra solicitudes. La numeración se configura para supervisión, pero no modifica SAINT. La interfaz usa un token administrativo compartido en sessionStorage; antes de producción hay que implementar usuarios/roles, sesiones seguras, auditoría, CSRF y rate limiting. No exponga directamente el puerto HTTP a Internet. No suba `.env`, certificados ni claves a GitHub.
 
-## Heartbeat desde agente
-
-```bash
-curl -X POST http://127.0.0.1:8080/agent/heartbeat -H 'X-API-Key: REEMPLAZAR_CON_API_KEY'
-```
-
-## Notas técnicas
-
-- En SAINT, `TipoFac=A` representa factura y `TipoFac=B` nota crédito. Los códigos internos se traducirán a nombres legibles en la interfaz.
-- Las resoluciones, prefijos, rangos, consecutivos y vigencias serán configuraciones por empresa/documento; no están implementados en este esqueleto.
-- La central almacena únicamente SHA-256 de las API Keys. Falta rotación/revocación, auditoría, rate limits, permisos y migraciones antes de producción.
-- El agente Windows debe mantener localmente el certificado PKCS#12, su contraseña cifrada con DPAPI, las credenciales SQL y la cola de procesamiento.
-- La central nunca debe volver a enviar a DIAN un documento aceptado solo porque falló su correo.
+Para publicar en GitHub, suba el contenido de esta carpeta y no el archivo ZIP.
